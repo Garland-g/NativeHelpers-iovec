@@ -1,0 +1,21 @@
+use v6.c;
+use Test;
+use NativeHelpers::iovec;
+
+my $blob = "Hello World".encode;
+
+my $iovec = iovec.new($blob);
+
+is-deeply $iovec.Blob.list, $blob.list, <Recreate blob>;
+
+ok $iovec.Blob !=== $blob, <Is a copy of the Blob>;
+
+my $str = "Hello World";
+
+my $iovec2 = iovec.new($blob);
+
+is-deeply $iovec.Blob.decode, $str, <Is a copy of the Str>;
+
+ok +$iovec.iov_base !== +$iovec2.iov_base, <Not the same memory>;
+
+done-testing;
