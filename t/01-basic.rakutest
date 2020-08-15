@@ -16,6 +16,10 @@ my $iovec2 = iovec.new($blob);
 
 is-deeply $iovec.Blob.decode, $str, <Is a copy of the Str>;
 
-ok +$iovec.iov_base !== +$iovec2.iov_base, <Not the same memory>;
+ok +$iovec.base !== +$iovec2.base, <Not the same memory>;
+
+lives-ok { $iovec.free }, <Free the first iovec>;
+
+lives-ok { $iovec2.free }, <Free the second iovec>;
 
 done-testing;
