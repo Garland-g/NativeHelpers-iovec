@@ -5,7 +5,7 @@
   ],
   "build-depends" : [ ],
   "depends" : [ ],
-  "description" : "blah blah blah",
+  "description" : "An implementation of the iovec struct",
   "license" : "Artistic-2.0",
   "name" : "NativeHelpers::iovec",
   "perl" : "6.c",

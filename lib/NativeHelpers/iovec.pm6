@@ -43,6 +43,10 @@ class iovec:ver<0.0.1>:auth<cpan:GARLANDG> is repr('CStruct') is rw is export {
   method Str(iovec:D: :$enc = 'utf-8') {
     return self.Blob.decode($enc);
   }
+
+  method Pointer {
+    $!base;
+  }
 }
 =begin pod
 
