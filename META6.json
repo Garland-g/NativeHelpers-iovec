@@ -3,8 +3,17 @@
   "authors": [
     "Travis Gibson"
   ],
+  "build": {
+    "makefile-variables": {
+      "iovechelper": {
+        "resource": "libraries/iovechelper"
+      }
+    }
+  },
   "build-depends": [
+    "Distribution::Builder::MakeFromJSON:ver<0.6+>"
   ],
+  "builder": "Distribution::Builder::MakeFromJSON",
   "depends": [
   ],
   "description": "An implementation of the iovec struct",
@@ -15,9 +24,12 @@
     "NativeHelpers::iovec": "lib/NativeHelpers/iovec.rakumod"
   },
   "resources": [
+    "libraries/iovechelper"
   ],
   "source-url": "https://github.com/Garland-g/NativeHelpers-iovec.git",
   "tags": [
+    "NativeCall",
+    "iovec"
   ],
   "test-depends": [
   ],

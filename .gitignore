@@ -4,5 +4,7 @@
 /.panda-work
 /resources/*.so
 /resources/*.dylib
+/resources/libraries/*
 .precomp/
+Makefile
 /NativeHelpers-iovec-*

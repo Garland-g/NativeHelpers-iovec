@@ -1,53 +1,6 @@
 use v6;
 use NativeCall;
 
-class iovec:ver<0.0.1>:auth<cpan:GARLANDG> is repr('CStruct') is rw is export {
-  has Pointer[void] $.base;
-  has size_t $.elems;
-
-  sub free(Pointer) is native { ... }
-
-  sub memcpy(Pointer[void], Pointer[void], size_t) returns Pointer[void] is native {...}
-
-  sub malloc(size_t $size) returns Pointer[void] is native { ... }
-
-  submethod BUILD(Pointer:D :$base, Int:D :$elems) {
-    $!base := $base;
-    $!elems = $elems;
-  }
-
-  method free(iovec:D:) {
-    free(nativecast(Pointer[void], self));
-  }
-
-  multi method new(iovec:U: Str $str, :$enc = 'utf-8' --> iovec) {
-    self.new($str.encode($enc));
-  }
-
-  multi method new(iovec:U: Blob $blob --> iovec) {
-    my $ptr = malloc($blob.bytes);
-    memcpy($ptr, nativecast(Pointer[void], $blob), $blob.bytes);
-    self.bless(:base($ptr), :elems($blob.bytes));
-  }
-
-  multi method new(iovec:U: Pointer:D $base, Int:D $elems) {
-    self.bless(:$base, :$elems);
-  }
-
-  method Blob(iovec:D:) {
-    my blob8 $buf .= allocate($!elems);
-    memcpy(nativecast(Pointer[void], $buf), $!base, $!elems);
-    $buf;
-  }
-
-  method Str(iovec:D: :$enc = 'utf-8') {
-    return self.Blob.decode($enc);
-  }
-
-  method Pointer {
-    $!base;
-  }
-}
 =begin pod
 
 =head1 NAME
@@ -56,7 +9,7 @@ NativeHelpers::iovec - An implementation of the iovec struct
 
 =head1 SYNOPSIS
 
-=begin code :lang<perl6>
+=begin code :lang<raku>
 
 use NativeHelpers::iovec;
 
@@ -64,47 +17,119 @@ my iovec $iov .= new("Hello World");
 
 say $iov.elems; # 11
 
+say $iov[0].chr; # H
+
 =end code
 
 =head1 DESCRIPTION
 
 NativeHelpers::iovec is an implementation of the iovec struct. It supports
-creating iovecs from Blob and Str objects, or from a Pointer and a number
+creating iovecs from Blob and Str objects, or from a number
 of bytes.
+
+NativeHelpers::iovec supports CArray methods (elems, list, AT-POS), which all operate
+on the buffer.
+
+NativeHelpers::iovec instances must be freed manually. They are not garbage-collected under any circumstance.
 
 =head1 METHODS
 
-=head2 elems
+=end pod
 
-Returns the size of the buffer in bytes
+class iovec:ver<0.0.1>:auth<cpan:GARLANDG> is repr('CStruct') does Positional is export {
+  has size_t $!base; # void *
+  has size_t $!elems;
 
-=head2 base
+  # Work around weird warning when running raku --doc.
+  constant LIB = DOC BEGIN { "string" } // %?RESOURCES<libraries/iovechelper>.Str;
 
-Returns a void Pointer to the start of the memory buffer
+  my sub calloc(size_t $n_elems, size_t $size) returns Pointer[void] is native { ... }
 
-=head2 free
+  my sub free(Pointer) is native { ... }
 
-Frees the allocated memory
+  my sub cstr_pointer(Str) returns size_t is native(LIB) { ... }
 
-=head2 Blob
+  multi submethod BUILD(Int:D :$base, Int:D :$elems) {
+    $!base = $base;
+    $!elems = $elems;
+  }
 
-Returns a new Blob with a copy of the memory buffer
+  #| Returns the size of the buffer in bytes
+  method elems { $!elems }
 
-=head2 Str(:$enc = 'utf-8')
+  #| Returns a void Pointer to the start of the memory buffer
+  method base {
+    return Pointer[uint8].new($!base)
+  }
 
-Returns a new Str containing the decoded memory buffer
+  #| Frees the iovec buffer
+  method free(iovec:D:) {
+    free(Pointer[void].new($!base));
+  }
 
-=head2 new(Str, :$enc = 'utf-8')
+  #| Create an new iovec with a Str
+  multi method new(iovec:U: Str $str, :enc($encoding) = 'utf8' --> iovec) {
+    my $cstr = explicitly-manage($str, :$encoding);
+    my $base = cstr_pointer($cstr);
+    self.bless(:$base, elems => $str.encode($cstr.encoding).bytes);
+  }
 
-Create a new iovec containing the encoded string
+  #| Create an new iovec with a Blob
+  multi method new(iovec:U: Blob $blob --> iovec) {
+    self.bless(base => cstr_pointer(explicitly-manage($blob.decode('utf8-c8'))), elems => $blob.bytes);
+  }
 
-=head2 new(Blob)
+  #| Create a new iovec with $elems elements
+  multi method new(iovec:U: Int $elems --> iovec) {
+    my $base = +calloc(1, $elems);
+    self.bless(:$base, :$elems);
+  }
 
-Create a new iovec containing the contents of the Blob
+  #| Allocate a new iovec with $elems elements
+  #| Same as new(Int $elems)
+  multi method allocate(iovec:U: Int $elems --> iovec) {
+    my $base = +calloc(1, $elems);
+    self.bless(:$base, :$elems);
+  }
 
-=head2 new(Pointer:D, Int:D)
+  #| Return a Blob copy of the buffer
+  method Blob(iovec:D:) returns Blob {
+    nativecast(Str, Pointer.new($!base)).encode('utf8-c8');
+  }
 
-Create a new iovec with the given Pointer and size
+  #| Return the buffer converted into a Str
+  method Str(iovec:D:) returns Str {
+    return nativecast(Str, Pointer.new($!base));
+  }
+
+  #| Return the list of values inside the buffer
+  method list returns List {
+    return (do for ^$!elems {
+      self.AT-POS($_);
+    }).list
+  }
+
+  method AT-POS(iovec:D: $index) is rw {
+    if $index < $!elems {
+      return-rw nativecast(CArray[uint8], Pointer[uint8].new($!base))[$index];
+    }
+    else {
+      fail "Index out of range";
+    }
+  }
+
+  method ASSIGN-POS(iovec:D: $index, $new) {
+    if $index < $!elems {
+      nativecast(CArray[uint8], Pointer[uint8].new($!base))[$index] = $new;
+    }
+    else {
+      fail "Index out of range";
+    }
+  }
+
+}
+
+=begin pod
 
 =head1 AUTHOR
 

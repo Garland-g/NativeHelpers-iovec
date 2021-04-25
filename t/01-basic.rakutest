@@ -1,22 +1,39 @@
 use v6.c;
 use Test;
+use NativeCall;
 use NativeHelpers::iovec;
 
 my $blob = "Hello World".encode;
 
 my $iovec = iovec.new($blob);
 
-is-deeply $iovec.Blob.list, $blob.list, <Recreate blob>;
+isa-ok $iovec, iovec:D, <Create an iovec via a Blob>;
+
+is-deeply $iovec.Blob.list, $blob.list, <Lists match>;
 
 ok $iovec.Blob !=== $blob, <Is a copy of the Blob>;
 
 my $str = "Hello World";
 
-my $iovec2 = iovec.new($blob);
+my $iovec2 = iovec.new($str);
 
-is-deeply $iovec.Blob.decode, $str, <Is a copy of the Str>;
+isa-ok $iovec2, iovec:D, <Create an iovec via a Str>;
 
-ok +$iovec.base !== +$iovec2.base, <Not the same memory>;
+is $iovec.Blob.decode, $str, <Is a copy of the Str>;
+
+is $iovec.Str, $str, <Is a copy of the Str>;
+
+my $iovec3 = iovec.new($blob.bytes);
+
+is $iovec3.elems, $blob.bytes, <Has the correct number of bytes to store the blob>;
+
+lives-ok { $iovec3[0..^11] >>=<< $blob.list }, <Can assign to iovec like an array>;
+
+dies-ok { $iovec3[126] }, <Cannot assign off the end of the iovec>;
+
+is $iovec3[*-1], $blob[*-1], <Get the last item in the iovec>;
+
+is $iovec3.Str, $blob.decode, <Can cast to Str>;
 
 lives-ok { $iovec.free }, <Free the first iovec>;
 
