@@ -24,7 +24,7 @@ say $iov[0].chr; # H
 =head1 DESCRIPTION
 
 NativeHelpers::iovec is an implementation of the iovec struct. It supports
-creating iovecs from Blob and Str objects, or from a number
+creating iovec objects from Blob and Str objects, or from a number
 of bytes.
 
 NativeHelpers::iovec supports CArray methods (elems, list, AT-POS), which all operate
