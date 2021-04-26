@@ -14,6 +14,13 @@ my iovec $iov .= new("Hello World");
 say $iov.elems; # 11
 
 say $iov[0].chr; # H
+
+my iovecs $iovecs .= new(2);
+
+$iovecs[0] = iovec.new("Hello ");
+$iovecs[1] = iovec.new("World\n");
+
+say $iovecs[0].Str ~ $iovecs[1].Str; # "Hello World\n"
 ```
 
 DESCRIPTION
@@ -24,6 +31,8 @@ NativeHelpers::iovec is an implementation of the iovec struct. It supports creat
 NativeHelpers::iovec supports CArray methods (elems, list, AT-POS), which all operate on the buffer.
 
 NativeHelpers::iovec instances must be freed manually. They are not garbage-collected under any circumstance.
+
+NativeHelpers::iovecs objects are for scatter-gather io operations, which require *iovec. It supports CArray methods which all operate on the set of iovecs.
 
 METHODS
 =======
@@ -116,6 +125,55 @@ method list() returns List
 ```
 
 Return the list of values inside the buffer
+
+class iovecs
+------------
+
+Array of iovec
+
+### method new
+
+```perl6
+method new(
+    Int $elems
+) returns iovecs
+```
+
+Allocate space for a new set of iovecs
+
+### method allocate
+
+```perl6
+method allocate(
+    Int $elems
+) returns iovecs
+```
+
+Allocate space for a new set of iovecs
+
+### method elems
+
+```perl6
+method elems() returns Int(Any)
+```
+
+Get the number of elements in this set of iovecs (using a side-channel via .^name)
+
+### method list
+
+```perl6
+method list() returns List
+```
+
+Get the list of iovecs
+
+### method free
+
+```perl6
+method free() returns Nil
+```
+
+Free all contained iovecs and the iovecs object itself
 
 AUTHOR
 ======

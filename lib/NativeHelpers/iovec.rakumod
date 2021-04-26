@@ -19,6 +19,13 @@ say $iov.elems; # 11
 
 say $iov[0].chr; # H
 
+my iovecs $iovecs .= new(2);
+
+$iovecs[0] = iovec.new("Hello ");
+$iovecs[1] = iovec.new("World\n");
+
+say $iovecs[0].Str ~ $iovecs[1].Str; # "Hello World\n"
+
 =end code
 
 =head1 DESCRIPTION
@@ -32,9 +39,16 @@ on the buffer.
 
 NativeHelpers::iovec instances must be freed manually. They are not garbage-collected under any circumstance.
 
+NativeHelpers::iovecs objects are for scatter-gather io operations, which require *iovec. It supports CArray methods
+which all operate on the set of iovecs.
+
 =head1 METHODS
 
 =end pod
+
+my sub calloc(size_t $n_elems, size_t $size) returns Pointer[void] is native { ... }
+
+my sub free(Pointer) is native { ... }
 
 class iovec:ver<0.0.1>:auth<cpan:GARLANDG> is repr('CStruct') does Positional is export {
   has size_t $!base; # void *
@@ -42,10 +56,6 @@ class iovec:ver<0.0.1>:auth<cpan:GARLANDG> is repr('CStruct') does Positional is
 
   # Work around weird warning when running raku --doc.
   constant LIB = DOC BEGIN { "string" } // %?RESOURCES<libraries/iovechelper>.Str;
-
-  my sub calloc(size_t $n_elems, size_t $size) returns Pointer[void] is native { ... }
-
-  my sub free(Pointer) is native { ... }
 
   my sub cstr_pointer(Str) returns size_t is native(LIB) { ... }
 
@@ -127,6 +137,71 @@ class iovec:ver<0.0.1>:auth<cpan:GARLANDG> is repr('CStruct') does Positional is
     }
   }
 
+}
+
+#| Array of iovec
+class iovecs:ver<0.0.1>:auth<cpan:GARLANDG> is repr('CPointer') is export {
+  #| Allocate space for a new set of iovecs
+  method new(Int $elems --> iovecs) {
+    my $self := nativecast(iovecs, calloc($elems, nativesizeof(iovec)));
+    $self.^set_name("iovecs[$elems]");
+    $self
+  }
+
+  #| Allocate space for a new set of iovecs
+  method allocate(Int $elems --> iovecs) {
+    my $self := nativecast(iovecs, calloc($elems, nativesizeof(iovec)));
+    $self.^set_name("iovecs[$elems]");
+    $self
+  }
+
+  #| Get the number of elements in this set of iovecs (using a side-channel via .^name)
+  method elems(iovecs:D: --> Int()) { self.^name ~~ /\d+/ }
+
+  method ASSIGN-POS(iovecs:D: $index, $new) {
+    fail "Requires an iovec" unless $new ~~ iovec;
+    if $index < self.elems {
+      my $arr = nativecast(CArray[size_t], self);
+      $arr[2 * $index] = +$new.base;
+      $arr[2 * $index + 1] = $new.elems;
+    }
+    else {
+      fail "Index out of range"
+    }
+  }
+
+  method AT-POS(iovecs:D: $index) is raw {
+    if $index < self.elems {
+      my $ptr = nativecast(Pointer[size_t], self).add(2 * $index);
+      if $ptr.deref == 0 {
+        iovec:U
+      }
+      else {
+        nativecast(iovec, $ptr);
+      }
+    }
+    else {
+      fail "Index out of range"
+    }
+  }
+
+  #| Get the list of iovecs
+  method list(iovecs:D: --> List) {
+    return (do for ^self.elems {
+      self.AT-POS($_);
+    }).list;
+  }
+
+  #| Free all contained iovecs and the iovecs object itself
+  method free returns Nil {
+    my $ptr = nativecast(Pointer[size_t], self);
+    for ^self.elems {
+      nativecast(iovec, $ptr).free if $ptr.deref != 0;
+      $ptr .= add(2);
+    }
+    free(nativecast(Pointer, self));
+    Nil
+  }
 }
 
 =begin pod
