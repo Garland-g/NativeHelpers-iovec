@@ -1,0 +1,33 @@
+use v6;
+use Test;
+use NativeHelpers::iovec;
+use NativeCall;
+
+sub writev(int32 $fd, iovec $iov, int32 $iovcnt) returns ssize_t is native { ... }
+sub readv(int32 $fd, iovec $iov, int32 $iovcnt) returns ssize_t is native { ... }
+sub lseek(int32 $fd, int32 $offset, int32 $whence) returns int32 is native { ... }
+my $val = ('A'..'Z').pick(10).join('');
+my $data = (^1000).pick;
+my $handle = open $*TMPDIR.add($val).IO, :r, :w;
+
+my ($wbuf, $rbuf);
+
+$wbuf = iovec.new($val);
+
+$rbuf = iovec.new(10);
+
+my $res = writev($handle.native-descriptor, $wbuf, 1);
+is $res, 10, "Wrote temp data to file";
+lseek($handle.native-descriptor, 0, 0);
+is $handle.lines[0], $val, "data written matches";
+
+lseek($handle.native-descriptor, 0, 0);
+$res = readv($handle.native-descriptor, $rbuf, 1);
+is $res, 10, "Read temp data from file";
+is $rbuf.Str, $val, "Get temp data back from file";
+
+$wbuf.free;
+$rbuf.free;
+$handle.close;
+unlink($*TMPDIR.add($val).IO);
+done-testing;
